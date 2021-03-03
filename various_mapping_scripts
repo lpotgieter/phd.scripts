@@ -1,0 +1,47 @@
+#read trimming
+for f1 in your_directory/*fastq
+do
+fastq_quality_trimmer -t 20 -l 30 -i ${f1} -o ${f1}.trimmed
+done
+#repairing trimmed reads
+for f1 in your_directory/*_R1_001.fastq.trimmed.gz
+do
+f2=${f1%%_R1_001.fastq.trimmed.gz}"_R2_001.fastq.trimmed.gz"
+cd your_programs/bbmap/
+./repair.sh in1=${f1} in2=${f2} out1=${f1}fixed.fq out2=${f2}fixed.fq outsingle=${f1}.single.fq
+done
+#mapping with bwa-mem
+for f1 in your_directory/*_1.fq.gz
+do
+f2=${f1%%_1.fq.gz}"_2.fq.gz"
+bwa mem -t 4 -I -P /media/lizel/82AEF34EAEF3396D/chapter2/ref/core.fna ${f1} ${f2} > $
+{f1}.sam
+samtools view -S -b ${f1}.sam > ${f1}.bam
+rm *sam
+done
+#sort and index bam files
+for f1 in your_directory/*bam
+do
+samtools sort -@ 20 ${f1} > ${f1}.sorted
+done
+#if there were resequencing runs, merge the two (or more) bam files
+samtools merge ${run1} ${run2} > ${run1}.merged
+#remove duplicates and index bam files
+for f1 in your_directory/*bam.sorted.bam
+do
+samtools rmdup -S ${f1} ${f1}_rmdup.bam
+samtools index ${f1}_rmdup.bam
+done
+#Reference genome must be formatted for GATK
+samtools faidx ref.fasta
+
+#GATK HaplotypeCaller to produce GVCFs for each accession
+for f1 in /media/lizel/82AEF34EAEF3396D/chapter2/italy.sugar/*rg
+do
+gatk HaplotypeCaller -R ref.fasta -I ${f1} -O ${f1}.g.vcf.gz -ERC GVCF -ploidy 1
+done
+#Combine all of the GVCF files
+gatk CombineGVCFs –variant 1 –variant 2 -O combined.g.vcf.gz
+#Genotype GVCFs
+gatk GenotypeGVCFs -R ref.fasta -V combined.g.vcf.gz -O raw.vcf
+#raw.vcf can be further processed with VCFtools, and any downstream analyses!
